@@ -17,7 +17,10 @@ use {
         pubkey::Pubkey,
         transaction::SanitizedTransaction,
     },
-    std::sync::{Arc, RwLock},
+    std::{
+        borrow::Cow,
+        sync::{Arc, RwLock},
+    },
 };
 #[derive(Debug)]
 pub(crate) struct AccountsUpdateNotifierImpl {
@@ -116,7 +119,7 @@ impl AccountsUpdateNotifierImpl {
             rent_epoch: account.rent_epoch(),
             data: account.data(),
             write_version,
-            txn: *txn,
+            txn: txn.map(|tx| Cow::Borrowed(tx)),
         }
     }
 
@@ -158,7 +161,7 @@ impl AccountsUpdateNotifierImpl {
         for plugin in plugin_manager.plugins.iter() {
             let mut measure = Measure::start("geyser-plugin-update-account");
             match plugin.update_account(
-                ReplicaAccountInfoVersions::V0_0_3(&account),
+                ReplicaAccountInfoVersions::V0_0_3(Cow::Borrowed(&account)),
                 slot,
                 is_startup,
             ) {

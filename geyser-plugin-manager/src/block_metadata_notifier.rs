@@ -12,7 +12,10 @@ use {
     solana_runtime::bank::KeyedRewardsAndNumPartitions,
     solana_sdk::clock::UnixTimestamp,
     solana_transaction_status::{Reward, RewardsAndNumPartitions},
-    std::sync::{Arc, RwLock},
+    std::{
+        borrow::Cow,
+        sync::{Arc, RwLock},
+    },
 };
 
 pub(crate) struct BlockMetadataNotifierImpl {
@@ -52,7 +55,7 @@ impl BlockMetadataNotifier for BlockMetadataNotifierImpl {
                 executed_transaction_count,
                 entry_count,
             );
-            let block_info = ReplicaBlockInfoVersions::V0_0_4(&block_info);
+            let block_info = ReplicaBlockInfoVersions::V0_0_4(Cow::Borrowed(&block_info));
             match plugin.notify_block_metadata(block_info) {
                 Err(err) => {
                     error!(
@@ -112,10 +115,10 @@ impl BlockMetadataNotifierImpl {
     ) -> ReplicaBlockInfoV4<'a> {
         ReplicaBlockInfoV4 {
             parent_slot,
-            parent_blockhash,
+            parent_blockhash: Cow::Borrowed(&parent_blockhash),
             slot,
-            blockhash,
-            rewards,
+            blockhash: Cow::Borrowed(&blockhash),
+            rewards: Cow::Borrowed(rewards),
             block_time,
             block_height,
             executed_transaction_count,
