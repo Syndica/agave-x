@@ -10,7 +10,10 @@ use {
     solana_measure::measure::Measure,
     solana_metrics::*,
     solana_sdk::clock::Slot,
-    std::sync::{Arc, RwLock},
+    std::{
+        borrow,
+        sync::{Arc, RwLock},
+    },
 };
 
 pub(crate) struct EntryNotifierImpl {
@@ -39,7 +42,9 @@ impl EntryNotifier for EntryNotifierImpl {
             if !plugin.entry_notifications_enabled() {
                 continue;
             }
-            match plugin.notify_entry(ReplicaEntryInfoVersions::V0_0_2(&entry_info)) {
+            match plugin.notify_entry(ReplicaEntryInfoVersions::V0_0_2(borrow::Cow::Borrowed(
+                &entry_info,
+            ))) {
                 Err(err) => {
                     error!(
                         "Failed to notify entry, error: ({}) to plugin {}",

@@ -3,17 +3,18 @@
 /// In addition, the dynamic library must export a "C" function _create_plugin which
 /// creates the implementation of the plugin.
 use {
+    serde::{Deserialize, Serialize},
     solana_sdk::{
         clock::{Slot, UnixTimestamp},
         signature::Signature,
         transaction::SanitizedTransaction,
     },
     solana_transaction_status::{Reward, RewardsAndNumPartitions, TransactionStatusMeta},
-    std::{any::Any, error, io},
+    std::{any::Any, borrow::Cow, error, io},
     thiserror::Error,
 };
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[repr(C)]
 /// Information about an account being updated
 pub struct ReplicaAccountInfo<'a> {
@@ -43,7 +44,7 @@ pub struct ReplicaAccountInfo<'a> {
     pub write_version: u64,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[repr(C)]
 /// Information about an account being updated
 /// (extended with transaction signature doing this update)
@@ -74,10 +75,11 @@ pub struct ReplicaAccountInfoV2<'a> {
     pub write_version: u64,
 
     /// First signature of the transaction caused this account modification
-    pub txn_signature: Option<&'a Signature>,
+    #[serde(borrow)]
+    pub txn_signature: Option<Cow<'a, Signature>>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[repr(C)]
 /// Information about an account being updated
 /// (extended with reference to transaction doing this update)
@@ -108,52 +110,62 @@ pub struct ReplicaAccountInfoV3<'a> {
     pub write_version: u64,
 
     /// Reference to transaction causing this account modification
-    pub txn: Option<&'a SanitizedTransaction>,
+    #[serde(borrow)]
+    pub txn: Option<Cow<'a, SanitizedTransaction>>,
 }
 
 /// A wrapper to future-proof ReplicaAccountInfo handling.
 /// If there were a change to the structure of ReplicaAccountInfo,
 /// there would be new enum entry for the newer version, forcing
 /// plugin implementations to handle the change.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[repr(u32)]
 pub enum ReplicaAccountInfoVersions<'a> {
-    V0_0_1(&'a ReplicaAccountInfo<'a>),
-    V0_0_2(&'a ReplicaAccountInfoV2<'a>),
-    V0_0_3(&'a ReplicaAccountInfoV3<'a>),
+    #[serde(borrow)]
+    V0_0_1(Cow<'a, ReplicaAccountInfo<'a>>),
+    #[serde(borrow)]
+    V0_0_2(Cow<'a, ReplicaAccountInfoV2<'a>>),
+    #[serde(borrow)]
+    V0_0_3(Cow<'a, ReplicaAccountInfoV3<'a>>),
 }
 
 /// Information about a transaction
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[repr(C)]
 pub struct ReplicaTransactionInfo<'a> {
     /// The first signature of the transaction, used for identifying the transaction.
-    pub signature: &'a Signature,
+    #[serde(borrow)]
+    pub signature: Cow<'a, Signature>,
 
     /// Indicates if the transaction is a simple vote transaction.
     pub is_vote: bool,
 
-    /// The sanitized transaction.
-    pub transaction: &'a SanitizedTransaction,
+    #[serde(borrow)]
+    pub transaction: Cow<'a, SanitizedTransaction>,
 
     /// Metadata of the transaction status.
-    pub transaction_status_meta: &'a TransactionStatusMeta,
+    #[serde(borrow)]
+    pub transaction_status_meta: Cow<'a, TransactionStatusMeta>,
 }
 
 /// Information about a transaction, including index in block
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[repr(C)]
 pub struct ReplicaTransactionInfoV2<'a> {
     /// The first signature of the transaction, used for identifying the transaction.
-    pub signature: &'a Signature,
+    #[serde(borrow)]
+    pub signature: Cow<'a, Signature>,
 
     /// Indicates if the transaction is a simple vote transaction.
     pub is_vote: bool,
 
     /// The sanitized transaction.
-    pub transaction: &'a SanitizedTransaction,
+    #[serde(borrow)]
+    pub transaction: Cow<'a, SanitizedTransaction>,
 
     /// Metadata of the transaction status.
-    pub transaction_status_meta: &'a TransactionStatusMeta,
+    #[serde(borrow)]
+    pub transaction_status_meta: Cow<'a, TransactionStatusMeta>,
 
     /// The transaction's index in the block
     pub index: usize,
@@ -163,13 +175,16 @@ pub struct ReplicaTransactionInfoV2<'a> {
 /// If there were a change to the structure of ReplicaTransactionInfo,
 /// there would be new enum entry for the newer version, forcing
 /// plugin implementations to handle the change.
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[repr(u32)]
 pub enum ReplicaTransactionInfoVersions<'a> {
-    V0_0_1(&'a ReplicaTransactionInfo<'a>),
-    V0_0_2(&'a ReplicaTransactionInfoV2<'a>),
+    #[serde(borrow)]
+    V0_0_1(Cow<'a, ReplicaTransactionInfo<'a>>),
+    #[serde(borrow)]
+    V0_0_2(Cow<'a, ReplicaTransactionInfoV2<'a>>),
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[repr(C)]
 pub struct ReplicaEntryInfo<'a> {
     /// The slot number of the block containing this Entry
@@ -185,7 +200,7 @@ pub struct ReplicaEntryInfo<'a> {
     pub executed_transaction_count: u64,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[repr(C)]
 pub struct ReplicaEntryInfoV2<'a> {
     /// The slot number of the block containing this Entry
@@ -206,45 +221,56 @@ pub struct ReplicaEntryInfoV2<'a> {
 /// A wrapper to future-proof ReplicaEntryInfo handling. To make a change to the structure of
 /// ReplicaEntryInfo, add an new enum variant wrapping a newer version, which will force plugin
 /// implementations to handle the change.
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[repr(u32)]
 pub enum ReplicaEntryInfoVersions<'a> {
-    V0_0_1(&'a ReplicaEntryInfo<'a>),
-    V0_0_2(&'a ReplicaEntryInfoV2<'a>),
+    #[serde(borrow)]
+    V0_0_1(Cow<'a, ReplicaEntryInfo<'a>>),
+    #[serde(borrow)]
+    V0_0_2(Cow<'a, ReplicaEntryInfoV2<'a>>),
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[repr(C)]
 pub struct ReplicaBlockInfo<'a> {
     pub slot: Slot,
-    pub blockhash: &'a str,
-    pub rewards: &'a [Reward],
+    #[serde(borrow)]
+    pub blockhash: Cow<'a, str>,
+    #[serde(borrow)]
+    pub rewards: Cow<'a, [Reward]>,
     pub block_time: Option<UnixTimestamp>,
     pub block_height: Option<u64>,
 }
 
 /// Extending ReplicaBlockInfo by sending the executed_transaction_count.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[repr(C)]
 pub struct ReplicaBlockInfoV2<'a> {
     pub parent_slot: Slot,
-    pub parent_blockhash: &'a str,
+    #[serde(borrow)]
+    pub parent_blockhash: Cow<'a, str>,
     pub slot: Slot,
-    pub blockhash: &'a str,
-    pub rewards: &'a [Reward],
+    #[serde(borrow)]
+    pub blockhash: Cow<'a, str>,
+    #[serde(borrow)]
+    pub rewards: Cow<'a, [Reward]>,
     pub block_time: Option<UnixTimestamp>,
     pub block_height: Option<u64>,
     pub executed_transaction_count: u64,
 }
 
 /// Extending ReplicaBlockInfo by sending the entries_count.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[repr(C)]
 pub struct ReplicaBlockInfoV3<'a> {
     pub parent_slot: Slot,
-    pub parent_blockhash: &'a str,
+    #[serde(borrow)]
+    pub parent_blockhash: Cow<'a, str>,
     pub slot: Slot,
-    pub blockhash: &'a str,
-    pub rewards: &'a [Reward],
+    #[serde(borrow)]
+    pub blockhash: Cow<'a, str>,
+    #[serde(borrow)]
+    pub rewards: Cow<'a, [Reward]>,
     pub block_time: Option<UnixTimestamp>,
     pub block_height: Option<u64>,
     pub executed_transaction_count: u64,
@@ -252,26 +278,34 @@ pub struct ReplicaBlockInfoV3<'a> {
 }
 
 /// Extending ReplicaBlockInfo by sending RewardsAndNumPartitions.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[repr(C)]
 pub struct ReplicaBlockInfoV4<'a> {
     pub parent_slot: Slot,
-    pub parent_blockhash: &'a str,
+    #[serde(borrow)]
+    pub parent_blockhash: Cow<'a, str>,
     pub slot: Slot,
-    pub blockhash: &'a str,
-    pub rewards: &'a RewardsAndNumPartitions,
+    #[serde(borrow)]
+    pub blockhash: Cow<'a, str>,
+    #[serde(borrow)]
+    pub rewards: Cow<'a, RewardsAndNumPartitions>,
     pub block_time: Option<UnixTimestamp>,
     pub block_height: Option<u64>,
     pub executed_transaction_count: u64,
     pub entry_count: u64,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[repr(u32)]
 pub enum ReplicaBlockInfoVersions<'a> {
-    V0_0_1(&'a ReplicaBlockInfo<'a>),
-    V0_0_2(&'a ReplicaBlockInfoV2<'a>),
-    V0_0_3(&'a ReplicaBlockInfoV3<'a>),
-    V0_0_4(&'a ReplicaBlockInfoV4<'a>),
+    #[serde(borrow)]
+    V0_0_1(Cow<'a, ReplicaBlockInfo<'a>>),
+    #[serde(borrow)]
+    V0_0_2(Cow<'a, ReplicaBlockInfoV2<'a>>),
+    #[serde(borrow)]
+    V0_0_3(Cow<'a, ReplicaBlockInfoV3<'a>>),
+    #[serde(borrow)]
+    V0_0_4(Cow<'a, ReplicaBlockInfoV4<'a>>),
 }
 
 /// Errors returned by plugin calls
@@ -306,7 +340,7 @@ pub enum GeyserPluginError {
 }
 
 /// The current status of a slot
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[repr(u32)]
 pub enum SlotStatus {
     /// The highest slot of the heaviest fork processed by the node. Ledger state at this slot is

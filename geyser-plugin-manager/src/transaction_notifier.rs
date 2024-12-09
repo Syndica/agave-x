@@ -10,7 +10,10 @@ use {
     solana_rpc::transaction_notifier_interface::TransactionNotifier,
     solana_sdk::{clock::Slot, signature::Signature, transaction::SanitizedTransaction},
     solana_transaction_status::TransactionStatusMeta,
-    std::sync::{Arc, RwLock},
+    std::{
+        borrow::{self, Cow},
+        sync::{Arc, RwLock},
+    },
 };
 
 /// This implementation of TransactionNotifier is passed to the rpc's TransactionStatusService
@@ -49,7 +52,9 @@ impl TransactionNotifier for TransactionNotifierImpl {
                 continue;
             }
             match plugin.notify_transaction(
-                ReplicaTransactionInfoVersions::V0_0_2(&transaction_log_info),
+                ReplicaTransactionInfoVersions::V0_0_2(borrow::Cow::Borrowed(
+                    &transaction_log_info,
+                )),
                 slot,
             ) {
                 Err(err) => {
@@ -90,10 +95,10 @@ impl TransactionNotifierImpl {
     ) -> ReplicaTransactionInfoV2<'a> {
         ReplicaTransactionInfoV2 {
             index,
-            signature,
+            signature: borrow::Cow::Borrowed(&signature),
             is_vote: transaction.is_simple_vote_transaction(),
-            transaction,
-            transaction_status_meta,
+            transaction: Cow::Borrowed(&transaction),
+            transaction_status_meta: Cow::Borrowed(&transaction_status_meta),
         }
     }
 }
